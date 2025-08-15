@@ -1,0 +1,57 @@
+{
+  "teams": [
+    {
+      "id": 1,
+      "nama": "Team Alpha",
+      "username": "alpha@example.com",
+      "durasi_hari": 365,
+      "seat_maks": 5,
+      "created_at": "2025-08-15T18:22:52.049Z"
+    },
+    {
+      "id": 2,
+      "nama": "Team Beta",
+      "username": "beta@example.com",
+      "durasi_hari": 180,
+      "seat_maks": 4,
+      "created_at": "2025-08-15T18:22:52.049Z"
+    }
+  ],
+  "seats": [
+    {
+      "id": 1,
+      "team_id": 1,
+      "email": "alpha1@example.com",
+      "jenis": "privat",
+      "mulai": "2025-08-12T18:22:52.050Z",
+      "berakhir": "2025-09-04T18:22:52.050Z"
+    },
+    {
+      "id": 2,
+      "team_id": 1,
+      "email": "alpha2@example.com",
+      "jenis": "privat",
+      "mulai": "2025-08-15T18:22:52.050Z",
+      "berakhir": "2025-08-20T18:22:52.050Z"
+    },
+    {
+      "id": 3,
+      "team_id": 1,
+      "email": "alpha3@example.com",
+      "jenis": "privat",
+      "mulai": "2025-07-06T18:22:52.050Z",
+      "berakhir": "2025-08-14T18:22:52.050Z"
+    },
+    {
+      "id": 4,
+      "team_id": 2,
+      "email": "beta1@example.com",
+      "jenis": "sharing",
+      "mulai": "2025-08-08T18:22:52.050Z",
+      "berakhir": "2025-08-17T18:22:52.050Z"
+    }
+  ],
+  "meta": {
+    "saved_at": "2025-08-15T18:22:52.050Z"
+  }
+}

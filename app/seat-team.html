@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kelola Seat - Control Meowlie</title>
+  <link rel="stylesheet" href="assets/bootstrap.min.css">
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/custom.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.css">
+</head>
+<body class="sb-nav-fixed">
+<div id="header"></div>
+<main class="container-fluid px-4 my-4">
+  <div class="card mb-3 team-card">
+    <div class="card-body">
+      <h5 class="card-title" id="teamName"></h5>
+      <p class="card-text mb-2" id="teamStats"></p>
+      <div class="progress" style="height:6px;" aria-label="Kapasitas kursi">
+        <div class="progress-bar" id="teamProgress" role="progressbar" style="width:0%" aria-valuemin="0" aria-valuemax="0"></div>
+      </div>
+    </div>
+  </div>
+  <div class="d-flex justify-content-end mb-2">
+    <button id="btnAdd" class="btn btn-primary">Tambah Member</button>
+  </div>
+  <div class="row mb-3">
+    <div class="col-md-4">
+      <label for="statusFilter" class="form-label">Filter Status</label>
+      <select id="statusFilter" class="form-select" aria-label="Filter status">
+        <option value="">Semua</option>
+        <option value="active">Aktif</option>
+        <option value="expiring">Segera Berakhir</option>
+        <option value="expired">Non Aktif</option>
+      </select>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <table class="table table-striped table-hover" id="membersTable" aria-label="Daftar Member">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Tipe</th>
+            <th>Mulai</th>
+            <th>Berakhir</th>
+            <th>Sisa Durasi</th>
+            <th>Status</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+<div id="footer"></div>
+<div class="position-fixed top-0 end-0 p-3" style="z-index:1100">
+  <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header">
+      <strong class="me-auto" id="toastTitle"></strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body" id="toastBody"></div>
+  </div>
+</div>
+<div class="modal fade" id="formModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="formModalTitle">Tambah Member</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="seatForm">
+          <input type="hidden" id="seatId">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Email</label>
+              <input type="email" id="seatEmail" class="form-control" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Tipe</label>
+              <select id="seatType" class="form-select">
+                <option value="privat">Privat</option>
+                <option value="sharing">Sharing</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Durasi (hari)</label>
+              <input type="number" id="seatDur" class="form-control" value="1" min="1">
+            </div>
+          </div>
+          <div class="row g-3 mt-1">
+            <div class="col-md-6">
+              <label class="form-label">Tanggal Mulai</label>
+              <input type="date" id="seatDate" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Waktu Mulai</label>
+              <div class="input-group">
+                <input type="time" id="seatTime" class="form-control">
+                <button type="button" id="btnNow" class="btn btn-outline-secondary">Sekarang</button>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3">
+            <button type="submit" class="btn btn-success me-2">Simpan</button>
+            <button type="button" id="cancelForm" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmTitle" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="confirmTitle">Konfirmasi</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="confirmMessage">Apakah Anda yakin?</div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+        <button type="button" class="btn btn-danger" id="confirmYes">Hapus</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="assets/bootstrap.bundle.min.js"></script>
+<script src="assets/scripts.js"></script>
+<script src="assets/main.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/umd/simple-datatables.min.js"></script>
+<script>
+const params=new URLSearchParams(location.search);
+const teamId=Number(params.get('teamId'));
+let team=null;
+let members=[];
+let dt=null;
+let deleteId=null;
+const statusFilter=document.getElementById('statusFilter');
+statusFilter.addEventListener('change',()=>renderMembers());
+function badge(status){
+  if(status==='active') return 'badge-status-active';
+  if(status==='expiring') return 'badge-status-expiring';
+  if(status==='expired') return 'badge-status-expired';
+  return 'badge-status-unused';
+}
+function toLocalString(iso){
+  const d=new Date(iso);
+  return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+}
+async function loadData(){
+  try{
+    const [teamRes,seatRes]=await Promise.all([
+      fetch(`/api/teams/${teamId}`),
+      fetch(`/api/seats?teamId=${teamId}`)
+    ]);
+    if(!teamRes.ok||!seatRes.ok) throw new Error('fail');
+    team=await teamRes.json();
+    members=await seatRes.json();
+  }catch(e){
+    showToast('Gagal','Gagal memuat data',false);
+    return;
+  }
+  renderTeam();
+  renderMembers();
+}
+function renderTeam(){
+  document.getElementById('teamName').textContent=team.nama;
+  const capacity=team.seat_maks??team.seats_capacity??0;
+  const remain=capacity-team.seats_used;
+  document.getElementById('teamStats').textContent=`Terisi: ${team.seats_used}/${capacity} | Sisa Slot: ${remain}`;
+  const percent=capacity?Math.round((team.seats_used/capacity)*100):0;
+  const bar=document.getElementById('teamProgress');
+  bar.style.width=`${percent}%`;
+  bar.setAttribute('aria-valuenow',team.seats_used);
+  bar.setAttribute('aria-valuemax',capacity);
+}
+function statusText(s){return s==='expired'?'Non Aktif':'Aktif';}
+function tipeText(j){return (j==='sharing'||j==='pro')?'Sharing':'Privat';}
+function remainingText(end){
+  const diff=new Date(end)-new Date();
+  if(diff<=0) return '0 hari';
+  const days=Math.floor(diff/86400000);
+  const hours=Math.floor((diff%86400000)/3600000);
+  const mins=Math.floor((diff%3600000)/60000);
+  if(days>0) return `${days} hari ${hours} jam`;
+  if(hours>0) return `${hours} jam ${mins} mnt`;
+  return `${mins} mnt`;
+}
+function renderMembers(){
+  const tbody=document.querySelector('#membersTable tbody');
+  tbody.innerHTML='';
+  members.filter(m=>!statusFilter.value||m.status===statusFilter.value).forEach(m=>{
+    const tr=document.createElement('tr');
+    tr.dataset.end=m.berakhir;
+    const remain=remainingText(m.berakhir);
+    const start=toLocalString(m.mulai).replace('T',' ');
+    const end=toLocalString(m.berakhir).replace('T',' ');
+    tr.innerHTML=`<td>${m.email}</td><td>${tipeText(m.jenis)}</td><td>${start}</td><td>${end}</td><td class="remain">${remain}</td><td><span class="badge ${badge(m.status)}" aria-label="Status ${statusText(m.status)}">${statusText(m.status)}</span></td><td><button class="btn btn-sm btn-secondary me-1 edit" data-id="${m.id}">Edit</button><button class="btn btn-sm btn-danger delete" data-id="${m.id}">Hapus</button></td>`;
+    tbody.appendChild(tr);
+  });
+  if(dt){dt.destroy();}
+  if(window.simpleDatatables){
+    dt=new simpleDatatables.DataTable('#membersTable',{
+      perPageSelect:[5,10,15,25],
+      labels:{
+        perPage:'Entri Per Halaman {select}',
+        noRows:'Tidak ada data'
+      }
+    });
+  }
+  const searchInput=document.querySelector('.dataTable-input');
+  if(searchInput){
+    searchInput.setAttribute('aria-label','Cari tabel');
+    searchInput.classList.add('form-control','form-control-sm');
+  }
+  const selector=document.querySelector('.dataTable-selector');
+  if(selector) selector.classList.add('form-select','form-select-sm');
+  document.querySelectorAll('.edit').forEach(b=>b.addEventListener('click',()=>editMember(b.dataset.id)));
+  document.querySelectorAll('.delete').forEach(b=>b.addEventListener('click',()=>confirmDelete(b.dataset.id)));
+  updateRemaining();
+}
+function showForm(m){
+  if(m){
+    document.getElementById('formModalTitle').textContent='Edit Member';
+    document.getElementById('seatId').value=m.id;
+    document.getElementById('seatEmail').value=m.email;
+    document.getElementById('seatType').value=(m.jenis==='sharing'||m.jenis==='pro')?'sharing':'privat';
+    document.getElementById('seatDur').value=Math.max(1,Math.ceil((new Date(m.berakhir)-new Date(m.mulai))/86400000));
+    const local=toLocalString(m.mulai);
+    document.getElementById('seatDate').value=local.slice(0,10);
+    document.getElementById('seatTime').value=local.slice(11,16);
+  }else{
+    document.getElementById('formModalTitle').textContent='Tambah Member';
+    document.getElementById('seatId').value='';
+    document.getElementById('seatForm').reset();
+    document.getElementById('seatDur').value=1;
+    document.getElementById('seatType').value='privat';
+    setNow();
+  }
+  const modal=new bootstrap.Modal(document.getElementById('formModal'));
+  modal.show();
+}
+function hideForm(){
+  const modal=bootstrap.Modal.getInstance(document.getElementById('formModal'));
+  if(modal) modal.hide();
+}
+function editMember(id){const m=members.find(x=>x.id==id);showForm(m);}
+function confirmDelete(id){
+  deleteId=id;
+  const modal=new bootstrap.Modal(document.getElementById('confirmModal'));
+  modal.show();
+}
+document.getElementById('confirmYes').addEventListener('click',async()=>{
+  if(!deleteId) return;
+  const modalEl=document.getElementById('confirmModal');
+  const modal=bootstrap.Modal.getInstance(modalEl);
+  modal.hide();
+  const r=await fetch(`/api/seats/${deleteId}`,{method:'DELETE'});
+  if(r.ok){showToast('Sukses','Member dihapus');loadData();}else{showToast('Gagal','Gagal menghapus',false);} 
+  deleteId=null;
+});
+function setNow(){
+  const now=new Date();
+  const local=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString();
+  document.getElementById('seatDate').value=local.slice(0,10);
+  document.getElementById('seatTime').value=local.slice(11,16);
+}
+async function saveSeat(ev){
+  ev.preventDefault();
+  const id=document.getElementById('seatId').value;
+  const capacity=team.seat_maks??team.seats_capacity??0;
+  if(!id && team.seats_used>=capacity){alert('Seat maksimal tercapai');return;}
+  const email=document.getElementById('seatEmail').value;
+  const jenis=document.getElementById('seatType').value;
+  const dur=parseInt(document.getElementById('seatDur').value);
+  let date=document.getElementById('seatDate').value;
+  let time=document.getElementById('seatTime').value;
+  if(!date||!time){
+    setNow();
+    date=document.getElementById('seatDate').value;
+    time=document.getElementById('seatTime').value;
+  }
+  const mulai=`${date}T${time}`;
+  const start=new Date(mulai);
+  const end=new Date(start.getTime()+dur*86400000);
+  if(end<=start){alert('Durasi tidak valid');return;}
+  const payload=id?{email,jenis,mulai:start.toISOString(),berakhir:end.toISOString()}:{team_id:teamId,email,jenis,mulai:start.toISOString(),berakhir:end.toISOString()};
+  const opts={method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)};
+  const url=id?`/api/seats/${id}`:'/api/seats';
+  const r=await fetch(url,opts);
+  if(r.ok){hideForm();loadData();showToast('Sukses','Seat tersimpan');}else{const err=await r.json().catch(()=>({}));showToast('Gagal',err.error||'Gagal menyimpan',false);}
+}
+document.getElementById('btnAdd').addEventListener('click',()=>showForm());
+document.getElementById('cancelForm').addEventListener('click',hideForm);
+document.getElementById('seatForm').addEventListener('submit',saveSeat);
+document.getElementById('btnNow').addEventListener('click',setNow);
+function updateRemaining(){
+  document.querySelectorAll('#membersTable tbody tr').forEach(tr=>{
+    tr.querySelector('.remain').textContent=remainingText(tr.dataset.end);
+  });
+}
+setInterval(updateRemaining,60000);
+function showToast(title,msg,success=true){
+  const el=document.getElementById('toast');
+  document.getElementById('toastTitle').textContent=title;
+  document.getElementById('toastBody').textContent=msg;
+  el.classList.remove('text-bg-success','text-bg-danger');
+  el.classList.add(success?'text-bg-success':'text-bg-danger');
+  const t=new bootstrap.Toast(el);
+  t.show();
+}
+loadPartials().then(loadData);
+</script>
+  <script src="assets/data-tools.js"></script>
+  <script src="assets/form-drafts.js"></script>
+</body>
+</html>

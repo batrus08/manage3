@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Control Meowlie</title>
+  <link rel="stylesheet" href="assets/bootstrap.min.css">
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/custom.css">
+</head>
+<body class="sb-nav-fixed">
+<div id="header"></div>
+<main class="container-fluid px-4 my-4">
+  <div class="row g-3 my-2">
+    <div class="col-md-3">
+      <div class="card bg-primary text-white">
+        <div class="card-body">
+          <div class="card-title">Akun Team</div>
+          <div id="metric-teams" class="display-6">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-success text-white">
+        <div class="card-body">
+          <div class="card-title">Member Terpakai</div>
+          <div id="metric-used" class="display-6">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-danger text-white">
+        <div class="card-body">
+          <div class="card-title">Expired</div>
+          <div id="metric-expired" class="display-6">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-secondary text-white">
+        <div class="card-body">
+          <div class="card-title">Kosong</div>
+          <div id="metric-empty" class="display-6">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-info text-white">
+        <div class="card-body">
+          <div class="card-title">Total Seat Dibuat</div>
+          <div id="metric-total" class="display-6">0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>Analisis</span>
+      <div class="d-flex gap-2">
+        <select id="data-select" class="form-select form-select-sm">
+          <option value="all">Semua data</option>
+          <option value="used">Jumlah user/seat</option>
+          <option value="expired">Expired</option>
+          <option value="active">Aktif</option>
+          <option value="remaining">Seat sisa</option>
+        </select>
+        <select id="range-select" class="form-select form-select-sm">
+          <option value="all">Semua</option>
+          <option value="7">7 hari</option>
+          <option value="30">30 hari</option>
+          <option value="90">90 hari</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="custom-range" class="row g-2 mb-3" style="display:none;">
+        <div class="col-auto"><input type="date" id="start-date" class="form-control form-control-sm"></div>
+        <div class="col-auto"><input type="date" id="end-date" class="form-control form-control-sm"></div>
+      </div>
+      <div class="chart-container"><canvas id="analysisChart"></canvas></div>
+    </div>
+  </div>
+  <div class="card mb-4">
+    <div class="card-header">Akun Terbaru</div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle" id="recentAccounts">
+          <thead class="table-light">
+            <tr class="text-center"><th>Email</th><th>Tipe</th><th>Status</th><th>Mulai</th><th>Berakhir</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+<div id="footer"></div>
+<script src="assets/bootstrap.bundle.min.js"></script>
+<script src="assets/scripts.js"></script>
+<script src="assets/main.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let seatsData=[];
+let summaryCounts=null;
+let chart=null;
+
+function toggleCustom(){
+  const custom=document.getElementById('range-select').value==='custom';
+  document.getElementById('custom-range').style.display=custom?'':'none';
+}
+
+function updateMetrics(date){
+  const teams=summaryCounts.teams;
+  const capacity=summaryCounts.capacity;
+  const used=seatsData.filter(s=>new Date(s.mulai)<=date).length;
+  const expired=seatsData.filter(s=>new Date(s.berakhir)<=date).length;
+  const active=seatsData.filter(s=>new Date(s.mulai)<=date && new Date(s.berakhir)>date).length;
+  const empty=capacity-active;
+  document.getElementById('metric-teams').textContent=teams;
+  document.getElementById('metric-used').textContent=active;
+  document.getElementById('metric-expired').textContent=expired;
+  document.getElementById('metric-empty').textContent=empty;
+  document.getElementById('metric-total').textContent=used;
+}
+
+function getRange(val){
+  const now=new Date();
+  if(val==='7') return {start:new Date(now.getTime()-6*86400000),end:now};
+  if(val==='30') return {start:new Date(now.getTime()-29*86400000),end:now};
+  if(val==='90') return {start:new Date(now.getTime()-89*86400000),end:now};
+  if(val==='custom'){
+    const s=document.getElementById('start-date').value;
+    const e=document.getElementById('end-date').value;
+    const start=s?new Date(s):now;
+    const end=e?new Date(e):now;
+    return {start,end};
+  }
+  const earliest=seatsData.reduce((m,s)=>Math.min(m,new Date(s.mulai)),now);
+  return {start:new Date(earliest),end:now};
+}
+
+function buildData(type,start,end){
+  const labels=[];
+  const activeData=[],expiredData=[],usedData=[],remainData=[];
+  for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
+    const day=new Date(d);
+    labels.push(day.toISOString().slice(0,10));
+    const active=seatsData.filter(s=>new Date(s.mulai)<=day && new Date(s.berakhir)>day).length;
+    const expired=seatsData.filter(s=>new Date(s.berakhir)<=day).length;
+    const used=seatsData.filter(s=>new Date(s.mulai)<=day).length;
+    const remain=summaryCounts.capacity-active;
+    activeData.push(active);
+    expiredData.push(expired);
+    usedData.push(used);
+    remainData.push(remain);
+  }
+  const ds=(label,data,color)=>({
+    label,
+    data,
+    borderColor:color,
+    backgroundColor:color+'33',
+    fill:true,
+    tension:0.4
+  });
+  const datasets=[];
+  if(type==='all'||type==='used') datasets.push(ds('Jumlah user/seat',usedData,'#0d6efd'));
+  if(type==='all'||type==='expired') datasets.push(ds('Expired',expiredData,'#dc3545'));
+  if(type==='all'||type==='active') datasets.push(ds('Aktif',activeData,'#198754'));
+  if(type==='all'||type==='remaining') datasets.push(ds('Seat sisa',remainData,'#6c757d'));
+  return {labels,datasets};
+}
+
+function renderChart(){
+  if(!summaryCounts) return;
+  const type=document.getElementById('data-select').value;
+  const range=document.getElementById('range-select').value;
+  const {start,end}=getRange(range);
+  updateMetrics(end);
+  const {labels,datasets}=buildData(type,start,end);
+  const ctx=document.getElementById('analysisChart').getContext('2d');
+  if(chart) chart.destroy();
+  chart=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets},
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom'}},
+      scales:{y:{beginAtZero:true,ticks:{precision:0}}}
+    }
+  });
+}
+
+document.getElementById('data-select').addEventListener('change',renderChart);
+document.getElementById('range-select').addEventListener('change',()=>{toggleCustom();renderChart();});
+document.getElementById('start-date').addEventListener('change',renderChart);
+document.getElementById('end-date').addEventListener('change',renderChart);
+
+async function loadOverview(){
+  try{
+    const [rSummary,rSeats]=await Promise.all([
+      fetch('/api/summary'),
+      fetch('/api/seats')
+    ]);
+    const summary=await rSummary.json();
+    const seats=await rSeats.json();
+    summaryCounts=summary.counts;
+    seatsData=seats;
+    const tbody=document.querySelector('#recentAccounts tbody');
+    summary.latestSeats.forEach(s=>{
+      const tr=document.createElement('tr');
+      const tipe=s.jenis==='sharing'?'Sharing':'Privat';
+      const active=s.status==='active'||s.status==='expiring';
+      const status=active?'Aktif':'Non aktif';
+      const badge=active?'bg-success':'bg-secondary';
+      tr.innerHTML=`<td class="text-start">${s.email}</td><td>${tipe}</td><td><span class="badge ${badge}">${status}</span></td><td>${formatDate(s.mulai)}</td><td>${formatDate(s.berakhir)}</td>`;
+      tbody.appendChild(tr);
+    });
+    renderChart();
+  }catch(e){alert('Gagal memuat ringkasan');}
+}
+toggleCustom();
+loadPartials().then(loadOverview);
+</script>
+  <script src="assets/dashboard-fix.js"></script>
+  <script src="assets/backup.js"></script>
+  <script src="assets/data-tools.js"></script>
+  <script src="assets/form-drafts.js"></script>
+</body>
+</html>

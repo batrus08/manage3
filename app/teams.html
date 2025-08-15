@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Akun Team - Control Meowlie</title>
+  <link rel="stylesheet" href="assets/bootstrap.min.css">
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/custom.css">
+</head>
+<body class="sb-nav-fixed">
+<div id="header"></div>
+<main class="container-fluid px-4 my-4">
+  <div class="row g-2 mb-3 align-items-stretch search-bar">
+    <div class="col-md-4">
+      <input id="searchName" class="form-control h-100" placeholder="Cari nama/username">
+    </div>
+    <div class="col-md-4">
+      <select id="sortBy" class="form-select h-100">
+        <option value="newest">Terbaru</option>
+        <option value="oldest">Terlama</option>
+        <option value="slots">Sisa slot terbanyak</option>
+        <option value="full">Slot full</option>
+      </select>
+    </div>
+    <div class="col-md-4">
+      <button id="btnAdd" class="btn btn-primary w-100 h-100 fw-semibold">Tambah Akun Team</button>
+    </div>
+  </div>
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle" id="teamsTable">
+          <thead class="table-primary"><tr><th>Nama</th><th>Seat Maks</th><th>Terisi</th><th>Sisa Slot</th><th>Sisa Durasi</th><th>Dibuat</th><th>Aksi</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+<!-- Modal -->
+<div class="modal fade" id="teamModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle">Tambah Akun Team</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="teamForm">
+      <div class="modal-body">
+          <input type="hidden" id="teamId">
+          <div class="mb-3">
+            <label class="form-label">Nama</label>
+            <input type="text" id="teamName" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" id="teamEmail" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Tanggal Buat</label>
+            <input type="date" id="teamCreated" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Durasi (hari)</label>
+            <input type="number" id="teamDur" class="form-control" value="1" min="1">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Kapasitas Seat</label>
+            <input type="number" id="teamSeat" class="form-control" value="1" min="1">
+          </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+        <button type="submit" class="btn btn-success">Simpan</button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+<div id="footer"></div>
+<script src="assets/bootstrap.bundle.min.js"></script>
+<script src="assets/scripts.js"></script>
+<script src="assets/main.js"></script>
+<script>
+let teams=[];
+function render(){
+  const q=document.getElementById('searchName').value.toLowerCase();
+  const sort=document.getElementById('sortBy').value;
+  let list=teams.filter(t=>{
+    return t.nama.toLowerCase().includes(q) || (t.username||'').toLowerCase().includes(q);
+  });
+  list.sort((a,b)=>{
+    if(sort==='newest') return new Date(b.created_at)-new Date(a.created_at);
+    if(sort==='oldest') return new Date(a.created_at)-new Date(b.created_at);
+    if(sort==='slots') {
+      const capA=a.seat_maks??a.seats_capacity??0;
+      const capB=b.seat_maks??b.seats_capacity??0;
+      return (capB-b.seats_used)-(capA-a.seats_used);
+    }
+    if(sort==='full') {
+      const capA=a.seat_maks??a.seats_capacity??0;
+      const capB=b.seat_maks??b.seats_capacity??0;
+      return (capA-a.seats_used)-(capB-b.seats_used);
+    }
+    return 0;
+  });
+  const tbody=document.querySelector('#teamsTable tbody');
+  tbody.innerHTML='';
+  list.forEach(t=>{
+    const capacity=t.seat_maks??t.seats_capacity??0;
+    const remain=capacity-t.seats_used;
+    const slotBadge=`<span class="badge ${remain>0?'bg-success':'bg-danger'}">${remain}</span>`;
+    const end=new Date(new Date(t.created_at).getTime()+((t.durasi_hari||0)*86400000));
+    const tr=document.createElement('tr');
+    tr.dataset.end=end.toISOString();
+    tr.innerHTML=`<td>${t.nama}</td><td class="text-center">${capacity}</td><td class="text-center">${t.seats_used}</td><td class="text-center">${slotBadge}</td><td class="text-nowrap remain">${remainingText(end)}</td><td>${formatDate(t.created_at)}</td><td><button class="btn btn-sm btn-secondary me-1 edit" data-id="${t.id}">Edit</button><button class="btn btn-sm btn-danger delete" data-id="${t.id}">Hapus</button></td>`;
+    tbody.appendChild(tr);
+  });
+  document.querySelectorAll('.edit').forEach(btn=>btn.addEventListener('click',()=>editTeam(btn.dataset.id)));
+  document.querySelectorAll('.delete').forEach(btn=>btn.addEventListener('click',()=>deleteTeam(btn.dataset.id)));
+  updateRemaining();
+}
+async function loadTeams(){
+  try{
+    const r=await fetch('/api/teams');
+    teams=await r.json();
+    render();
+  }catch(e){alert('Gagal memuat tim');}
+}
+document.getElementById('searchName').addEventListener('input',render);
+document.getElementById('sortBy').addEventListener('change',render);
+document.getElementById('btnAdd').addEventListener('click',()=>showForm());
+document.getElementById('teamForm').addEventListener('submit',saveTeam);
+function remainingText(end){
+  const diff=new Date(end)-new Date();
+  if(diff<=0) return '0 hari';
+  const days=Math.floor(diff/86400000);
+  const hours=Math.floor((diff%86400000)/3600000);
+  const mins=Math.floor((diff%3600000)/60000);
+  if(days>0) return `${days} hari ${hours} jam`;
+  if(hours>0) return `${hours} jam ${mins} mnt`;
+  return `${mins} mnt`;
+}
+function updateRemaining(){
+  document.querySelectorAll('#teamsTable tbody tr').forEach(tr=>{
+    tr.querySelector('.remain').textContent=remainingText(tr.dataset.end);
+  });
+}
+setInterval(updateRemaining,60000);
+const modal=new bootstrap.Modal(document.getElementById('teamModal'));
+function showForm(team){
+  document.getElementById('teamForm').reset();
+  const today=new Date().toISOString().slice(0,10);
+  document.getElementById('modalTitle').textContent=team?'Edit Akun Team':'Tambah Akun Team';
+  document.getElementById('teamId').value=team?team.id:'';
+  document.getElementById('teamName').value=team?team.nama:'';
+  document.getElementById('teamEmail').value=team?team.username||'':'';
+  document.getElementById('teamDur').value=team?.durasi_hari??1;
+  document.getElementById('teamSeat').value=team?.seat_maks??team?.seats_capacity??1;
+  document.getElementById('teamCreated').value=team?team.created_at.slice(0,10):today;
+  modal.show();
+}
+function hideForm(){modal.hide();}
+function editTeam(id){const t=teams.find(x=>x.id==id);showForm(t);}
+async function deleteTeam(id){
+  if(!confirm('Hapus team ini?')) return;
+  await fetch(`/api/teams/${id}`,{method:'DELETE'});
+  loadTeams();
+}
+async function saveTeam(ev){
+  ev.preventDefault();
+  const id=document.getElementById('teamId').value;
+  const payload={
+    nama:document.getElementById('teamName').value,
+    username:document.getElementById('teamEmail').value,
+    created_at:new Date(document.getElementById('teamCreated').value).toISOString(),
+    durasi_hari:parseInt(document.getElementById('teamDur').value,10)||1,
+    seat_maks:parseInt(document.getElementById('teamSeat').value,10)||1
+  };
+  const opts={
+    method:id?'PUT':'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  };
+  const url=id?`/api/teams/${id}`:'/api/teams';
+  const r=await fetch(url,opts);
+  if(r.ok){hideForm();loadTeams();}
+  else{alert('Gagal menyimpan');}
+}
+loadPartials().then(loadTeams);
+</script>
+  <script src="assets/data-tools.js"></script>
+  <script src="assets/form-drafts.js"></script>
+</body>
+</html>
