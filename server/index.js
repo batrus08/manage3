@@ -102,11 +102,22 @@ fastify.post('/api/seats', async (req, reply) => {
   const team = teams.find(t=> t.id === teamId);
   if(!team) return reply.code(400).send({ error: 'Team not found' });
   if(!email) return reply.code(400).send({ error: 'Email required' });
-  if(new Date(berakhir) <= new Date(mulai)) return reply.code(400).send({ error: 'Invalid dates' });
+  const startDate = new Date(mulai);
+  const endDate = new Date(berakhir);
+  if(isNaN(startDate) || isNaN(endDate) || endDate <= startDate){
+    return reply.code(400).send({ error: 'Invalid dates' });
+  }
   const used = seats.filter(s=> Number(s.team_id)===teamId && seatStatus(s)!=='expired').length;
   if(used >= team.seat_maks) return reply.code(400).send({ error: 'Seat full' });
   const id = nextId(seats);
-  const seat = { id, team_id: teamId, email, jenis: jenis||'basic', mulai, berakhir };
+  const seat = {
+    id,
+    team_id: teamId,
+    email,
+    jenis: jenis||'basic',
+    mulai: startDate.toISOString(),
+    berakhir: endDate.toISOString()
+  };
   seats.push(seat);
   saveData({teams, seats});
   reply.code(201).send(seatWithStatus(seat));
@@ -124,7 +135,9 @@ fastify.put('/api/seats/:id', async (req, reply) => {
   let { email, jenis, mulai, berakhir } = req.body||{};
   const newMulai = mulai ? new Date(mulai) : new Date(seat.mulai);
   const newBerakhir = berakhir ? new Date(berakhir) : new Date(seat.berakhir);
-  if(newBerakhir <= newMulai) return reply.code(400).send({ error:'Invalid dates' });
+  if(isNaN(newMulai) || isNaN(newBerakhir) || newBerakhir <= newMulai){
+    return reply.code(400).send({ error:'Invalid dates' });
+  }
   if(email !== undefined) seat.email = email;
   if(jenis !== undefined) seat.jenis = jenis;
   seat.mulai = newMulai.toISOString();
