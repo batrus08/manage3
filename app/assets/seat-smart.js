@@ -126,16 +126,32 @@
         const resp = await fetch('/api/teams');
         if(!resp.ok) throw new Error('Gagal memuat data team');
         const teams = await resp.json();
-        const candidates = teams.map(t=>{
+        const now = new Date();
+        const mapped = teams.map(t=>{
           const capacity = t.seats_capacity ?? t.seat_maks ?? 0;
           const used = t.seats_used ?? 0;
           const free = Math.max(0, capacity - used);
           const exp = teamExpiry(t);
+          const remainingDays = Math.ceil((exp.getTime() - now.getTime())/86400000);
           const daysLeftFromStart = Math.ceil((exp.getTime() - start.getTime())/86400000);
-          const can = free>0 && exp.getTime() >= end.getTime();
-          return { team:t, free, exp, daysLeftFromStart, can };
-        }).filter(c=>c.can)
-          .sort((a,b)=> a.daysLeftFromStart - b.daysLeftFromStart || (a.free - b.free));
+          return { team:t, free, exp, remainingDays, daysLeftFromStart };
+        }).filter(c=> c.free>0 && c.remainingDays>0);
+
+        let candidates = [];
+        if(dur <= 25){
+          candidates = mapped.filter(c=> c.daysLeftFromStart >= dur)
+            .sort((a,b)=> a.daysLeftFromStart - b.daysLeftFromStart || (a.free - b.free));
+        }else{
+          const range = mapped.filter(c=> c.daysLeftFromStart >= dur && c.daysLeftFromStart <= 30)
+            .sort((a,b)=> a.daysLeftFromStart - b.daysLeftFromStart || (a.free - b.free));
+          if(range.length){
+            candidates = range;
+          }else{
+            candidates = mapped.filter(c=> c.daysLeftFromStart >= dur)
+              .sort((a,b)=> a.daysLeftFromStart - b.daysLeftFromStart || (a.free - b.free));
+          }
+        }
+
         showPickModal({email, jenis, start, end, dur, candidates});
         modalObj.hide();
       }catch(e){
@@ -195,7 +211,7 @@
             <div class="small text-muted">
               Sisa slot: ${c.free} / ${(c.team.seats_capacity ?? c.team.seat_maks ?? 0)} ·
               Masa berlaku: ${f(c.exp)} ·
-              Sisa durasi dari mulai: ${c.daysLeftFromStart} hari
+              Sisa durasi: ${c.remainingDays} hari
             </div>
           </div>
           <div><button type="button" class="btn btn-sm btn-success" data-team="${c.team.id}">Gabung</button></div>`;
