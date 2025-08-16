@@ -9,6 +9,10 @@ fastify.register(require('@fastify/static'),{
 
 function iso(d){ return new Date(d).toISOString(); }
 function now(){ return new Date(); }
+function parseDate(d){
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? null : dt;
+}
 
 // ===== Persistence (JSON file) =====
 const DATA_FILE = path.join(__dirname, 'data.json');
@@ -163,13 +167,15 @@ fastify.post('/api/teams', async (req, reply) => {
   const { nama, durasi_hari, seat_maks, username, created_at } = req.body||{};
   if(!nama) return reply.code(400).send({ error:'Nama wajib' });
   const id = nextId(teams);
+  const createdDate = created_at ? parseDate(created_at) : now();
+  if(created_at && !createdDate) return reply.code(400).send({ error:'Invalid created_at' });
   const team = {
     id,
     nama,
     username: username||'',
     durasi_hari: Number(durasi_hari)||0,
     seat_maks: Number(seat_maks)||0,
-    created_at: created_at ? iso(new Date(created_at)) : iso(now())
+    created_at: iso(createdDate)
   };
   teams.push(team);
   saveData({teams, seats});
@@ -190,7 +196,11 @@ fastify.put('/api/teams/:id', async (req, reply) => {
   if(username !== undefined) team.username = username;
   if(durasi_hari !== undefined) team.durasi_hari = Number(durasi_hari)||0;
   if(seat_maks !== undefined) team.seat_maks = Number(seat_maks)||0;
-  if(created_at !== undefined) team.created_at = iso(new Date(created_at));
+  if(created_at !== undefined){
+    const newDate = parseDate(created_at);
+    if(!newDate) return reply.code(400).send({ error:'Invalid created_at' });
+    team.created_at = iso(newDate);
+  }
   saveData({teams, seats});
   reply.send(teamWithUsage(team));
 });
@@ -225,14 +235,17 @@ fastify.post('/api/import', async (req, reply) => {
     return reply.code(400).send({ error:'Format tidak valid. Harus {teams:[], seats:[]}' });
   }
   // Normalize
-  const newTeams = data.teams.map(t=> ({
-    id: Number(t.id),
-    nama: String(t.nama||''),
-    username: String(t.username||''),
-    durasi_hari: Number(t.durasi_hari)||0,
-    seat_maks: Number(t.seat_maks)||0,
-    created_at: iso(new Date(t.created_at||now()))
-  }));
+  const newTeams = data.teams.map(t=> {
+    const createdDate = parseDate(t.created_at) || now();
+    return {
+      id: Number(t.id),
+      nama: String(t.nama||''),
+      username: String(t.username||''),
+      durasi_hari: Number(t.durasi_hari)||0,
+      seat_maks: Number(t.seat_maks)||0,
+      created_at: iso(createdDate)
+    };
+  });
   // Fix duplicate or missing IDs
   const seen = new Set();
   newTeams.forEach((t,i)=>{
@@ -242,14 +255,18 @@ fastify.post('/api/import', async (req, reply) => {
     seen.add(t.id);
   });
   const idSet = new Set(newTeams.map(t=> t.id));
-  const newSeatsRaw = data.seats.map(s=>({
-    id: Number(s.id),
-    team_id: Number(s.team_id),
-    email: String(s.email||''),
-    jenis: String(s.jenis||'basic'),
-    mulai: iso(new Date(s.mulai||now())),
-    berakhir: iso(new Date(s.berakhir||now()))
-  }));
+  const newSeatsRaw = data.seats.map(s=> {
+    const start = parseDate(s.mulai) || now();
+    const end = parseDate(s.berakhir) || now();
+    return {
+      id: Number(s.id),
+      team_id: Number(s.team_id),
+      email: String(s.email||''),
+      jenis: String(s.jenis||'basic'),
+      mulai: iso(start),
+      berakhir: iso(end)
+    };
+  });
   const newSeats = [];
   let dropped=0;
   const usedSeatIds = new Set();
