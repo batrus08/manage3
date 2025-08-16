@@ -206,10 +206,12 @@ async function loadOverview(){
     if(!rSummary.ok || !rSeats.ok) throw new Error('Gagal memuat data');
     const summary=await rSummary.json();
     const seats=await rSeats.json();
-    summaryCounts=summary.counts;
+    const totalTeams=Array.isArray(summary.teams)?summary.teams.length:0;
+    const totalCap=Array.isArray(summary.teams)?summary.teams.reduce((a,t)=>a+(t.seats_capacity??t.seat_maks??0),0):0;
+    summaryCounts={teams:totalTeams,capacity:totalCap};
     seatsData=seats;
     const tbody=document.querySelector('#recentAccounts tbody');
-    summary.latestSeats.forEach(s=>{
+    seats.slice().sort((a,b)=>new Date(b.mulai)-new Date(a.mulai)).slice(0,5).forEach(s=>{
       const tr=document.createElement('tr');
       const tipe=s.jenis==='sharing'?'Sharing':'Privat';
       const active=s.status==='active'||s.status==='expiring';
