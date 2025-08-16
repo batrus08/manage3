@@ -203,6 +203,7 @@ async function loadOverview(){
       fetch('/api/summary'),
       fetch('/api/seats')
     ]);
+    if(!rSummary.ok || !rSeats.ok) throw new Error('Gagal memuat data');
     const summary=await rSummary.json();
     const seats=await rSeats.json();
     summaryCounts=summary.counts;
@@ -218,7 +219,10 @@ async function loadOverview(){
       tbody.appendChild(tr);
     });
     renderChart();
-  }catch(e){alert('Gagal memuat ringkasan');}
+  }catch(e){
+    console.error(e);
+    if(typeof showToast==='function') showToast('Gagal memuat data',false);
+  }
 }
 toggleCustom();
 loadPartials().then(loadOverview);
